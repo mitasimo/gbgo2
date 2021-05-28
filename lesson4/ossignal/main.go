@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	// создать контекст, который закроет свой канал done() при поступлении сигнала SIGTERM
+	// создать контекст, который закроет свой канал done() при поступлении сигнал SIGINT и SIGTERM
 	ctxSig, cancelSig := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	// в конце функции main вызвать функцию завершения
 	defer cancelSig()
