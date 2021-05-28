@@ -5,10 +5,8 @@ import (
 	"time"
 )
 
-// Обертка над вызовом divideByZero с
-//	- перехватом паники
-//	- возвратом ошибки
-func task2() (err error) {
+// Task2 - код для задания 2
+func Task2() (err error) {
 	defer func() {
 		// перехватить панику
 		if v := recover(); v != nil {
@@ -16,21 +14,21 @@ func task2() (err error) {
 			err = fmt.Errorf("%s; %w", v, NewErrorWithTime())
 		}
 	}()
-	_ = divideByZero() // вызывать панику деления на 0
+	_ = DivideByZero() // вызывать панику деления на 0
 	return
 }
 
-// NewErrorWithTime - создает новую ошибку ErrorWithTime
+// NewErrorWithTime создает новую ошибку ErrorWithTime
 func NewErrorWithTime() *ErrorWithTime {
 	return &ErrorWithTime{Time: time.Now()}
 }
 
-// Тип ошибки, хранящий время ее возникновения
+// ErrorWithTime - тип ошибки, хранящий время ее возникновения
 type ErrorWithTime struct {
 	time.Time
 }
 
-// Реализация функции Error из интерфейса error
+// Error - реализация функции Error из интерфейса error
 func (e *ErrorWithTime) Error() string {
 	return fmt.Sprintf("an error occurred %s", e.Format("2006-01-02 15:04:05"))
 }

@@ -1,3 +1,6 @@
+// Курс GO. Уровень 2
+// Домашнее задание к уроку 1
+
 package main
 
 import (
@@ -7,20 +10,20 @@ import (
 func main() {
 	var err error
 
-	task1()
+	Task1()
 
-	err = task2()
+	err = Task2()
 	if err != nil {
 		fmt.Println("Task 2:", err)
 	}
 
-	err = task3()
+	err = Task3()
 	if err != nil {
 		fmt.Println("Task 3:", err)
 	}
 
 	// пример 4
-	err = task4()
+	err = Task4()
 	if err != nil {
 		fmt.Println("Task 4:", err)
 	}

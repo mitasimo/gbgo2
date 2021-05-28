@@ -5,7 +5,8 @@ import (
 	"time"
 )
 
-func task4() (err error) {
+// Task4 - код для задания 4
+func Task4() (err error) {
 	// этим кодом паника обработана не будет!!!!
 	defer func() {
 		if v := recover(); v != nil {

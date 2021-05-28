@@ -4,14 +4,14 @@ import (
 	"fmt"
 )
 
-// divideByZero - генерирует неявную ошибку (деление на 0)
-func divideByZero() int {
+// DivideByZero генерирует неявную ошибку (деление на 0)
+func DivideByZero() int {
 	var zero int
 	return 1 / zero
 }
 
-// Обертка над вызовом divideByZero
-func task1() {
+// Task1 - код для задания 1
+func Task1() {
 	defer func() {
 		// перехватить панику
 		if v := recover(); v != nil {
@@ -19,5 +19,5 @@ func task1() {
 			fmt.Printf("Task 1: %v\n", v)
 		}
 	}()
-	_ = divideByZero() // вызывать панику деления на 0
+	_ = DivideByZero() // вызывать панику деления на 0
 }
