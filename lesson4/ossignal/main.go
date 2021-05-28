@@ -9,9 +9,13 @@ import (
 	"time"
 )
 
+var (
+	Terminate os.Signal = syscall.SIGTERM
+)
+
 func main() {
 	// создать контекст, который закроет свой канал done() при поступлении сигнал SIGINT и SIGTERM
-	ctxSig, cancelSig := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctxSig, cancelSig := signal.NotifyContext(context.Background(), os.Interrupt, Terminate)
 	// в конце функции main вызвать функцию завершения
 	defer cancelSig()
 
