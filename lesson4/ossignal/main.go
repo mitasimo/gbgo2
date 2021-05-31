@@ -33,7 +33,7 @@ func main() {
 				return
 			default:
 				// заснуть на 2 секунды
-				time.Sleep(time.Second * 2)
+				time.Sleep(time.Second * 15)
 			}
 
 		}
@@ -49,7 +49,7 @@ func main() {
 				return
 			default:
 				// заснуть на 2 секунды
-				time.Sleep(time.Second * 2)
+				time.Sleep(time.Millisecond * 100)
 			}
 		}
 	}(ctx)
