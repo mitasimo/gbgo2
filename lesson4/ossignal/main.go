@@ -23,10 +23,9 @@ func main() {
 	// создать контекст для завершения грутин
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// первая горутина
-	go Do(ctx, time.Second*15, "Горутина 1 завершена")
-	// вторая горутина
-	go Do(ctx, time.Microsecond*100, "Горутина 2 завершена")
+	for i := 0; i < 10; i++ {
+		go Do(ctx, time.Millisecond*time.Duration((i+1)*500), fmt.Sprintf("Горутина %d завершена", i))
+	}
 
 	// ожидать сигнал ОС
 	<-chanSig
