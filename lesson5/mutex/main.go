@@ -7,16 +7,12 @@ import (
 
 // SyncInt позволяет безопастно увеличивать свое значение из разных горутин
 type SyncInt struct {
-	val  int
-	lock sync.RWMutex
+	sync.Mutex
+	val int
 }
 
 // Add добавляет значение
 func (si *SyncInt) Add(v int) int {
-	// установить блокировку
-	si.lock.Lock()
-	// после выполнения функции снять блокировку
-	defer si.lock.Unlock()
 	// увеличить на v
 	si.val += v
 	// вернуть результат
@@ -25,9 +21,6 @@ func (si *SyncInt) Add(v int) int {
 
 // Val возвращает внутреннее значение
 func (si *SyncInt) Val() int {
-	si.lock.RLock()
-	defer si.lock.RUnlock()
-
 	return si.val
 }
 
@@ -40,18 +33,24 @@ func main() {
 
 	for i := 1; i < 10; i++ {
 		wg.Add(1) // увлеличить счетчик
-		go func(si *SyncInt, val, num int) {
+		go func(si *SyncInt, inc, num int) {
 			// после завершения функции уменьшить счетчик
 			defer wg.Done()
-			// выполнить горутино безопастный Add
-			newVal := si.Add(val)
-			fmt.Printf("Горутина %d изменила значение на %3d. Новое значение = %2d\n", num, val, newVal)
+			// заблокировать SyncInt, чтобы далее использовать безопастно
+			si.Lock()
+			// разблокировать в конце функции
+			defer si.Unlock()
+
+			olVal := si.Val()
+			newVal := si.Add(inc)
+			fmt.Printf("Горутина %d; Старое значение = %2d, инкремент = %2d, новое значение = %2d\n", num, olVal, inc, newVal)
 		}(&si, 2*i+1, i) // 2*i+1
 	}
 
 	// ожидать завершение всех горутин
 	wg.Wait()
 	// вывести результат
+	// si.Lock()
 	fmt.Printf("Значение = %d\n", si.Val())
 
 }
