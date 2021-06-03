@@ -44,7 +44,7 @@ func main() {
 			olVal := si.Val()
 			newVal := si.Add(inc)
 			fmt.Printf("Горутина %d; Старое значение = %2d, инкремент = %2d, новое значение = %2d\n", num, olVal, inc, newVal)
-		}(&si, 2*i+1, i) // 2*i+1
+		}(&si, 2*i+1, i)
 	}
 
 	// ожидать завершение всех горутин
