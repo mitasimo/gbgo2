@@ -1,138 +1,77 @@
 package main
 
 import (
-	"sync"
+	"runtime"
 	"testing"
 )
 
-func reader(locker sync.Locker, wg *sync.WaitGroup, numIter int) {
-	defer wg.Done()
-	for i := 0; i < numIter; i++ {
-		locker.Lock()
-		locker.Unlock()
+// Set интерфейс определяющий операции над множеством
+type Set interface {
+	Add(int)
+	Has(int) bool
+}
+
+// makeReader возвращает функцию чтения из множества
+func makeReader(s Set) func() {
+	return func() {
+		s.Has(0)
 	}
 }
 
-func writer(locker sync.Locker, wg *sync.WaitGroup, numIter int) {
-	defer wg.Done()
-	for i := 0; i < numIter; i++ {
-		locker.Lock()
-		locker.Unlock()
+// makeWriter - возвращает функция записи числа в множество
+func makeWriter(s Set) func() {
+	return func() {
+		s.Add(0)
 	}
 }
 
-func BenchmarkMutexW10R90(b *testing.B) {
-	var (
-		wg sync.WaitGroup
-		me sync.Mutex
-	)
+func Bench(name string, b *testing.B, s Set, numReaders, numWriters int) {
+	// Магическая константа!!!
+	// testing.B.Run() запускает переданный ей func() 5 раз
+	const numRun = 5
 
-	// 1 писатель
-	wg.Add(1)
-	go writer(&me, &wg, 900)
+	// всего задач
+	numTotal := numReaders + numWriters
 
-	// 9 читателей
-	for i := 0; i < 9; i++ {
-		wg.Add(1)
-		go reader(&me, &wg, 100)
+	numTasks := runtime.GOMAXPROCS(0) * numTotal * numRun
+
+	fnChan := make(chan func(), numTasks)
+
+	for i := 0; i < numTasks/numTotal*numReaders; i++ {
+		fnChan <- makeReader(s)
 	}
 
-	wg.Wait()
+	for i := 0; i < numTasks/numTotal*numWriters; i++ {
+		fnChan <- makeWriter(s)
+	}
+
+	b.ResetTimer()
+	b.Run(name, func(b1 *testing.B) {
+		// atomic.AddInt64(&cnt, 1)
+		b1.SetParallelism(numTotal)
+		b1.RunParallel(func(pb *testing.PB) {
+			fn := <-fnChan
+			for pb.Next() {
+				fn()
+			}
+		})
+	})
+
+	close(fnChan)
 }
 
-func BenchmarkRWMutexW10R90(b *testing.B) {
-	var (
-		wg sync.WaitGroup
-		me sync.RWMutex
-	)
+func BenchmarkSet(b *testing.B) {
 
-	// 1 писатель
-	wg.Add(1)
-	go writer(&me, &wg, 900)
+	setMutex := NewSetMutex()
+	setRWMutex := NewSetRWMutex()
 
-	// 9 читателей
-	for i := 0; i < 9; i++ {
-		wg.Add(1)
-		go reader(me.RLocker(), &wg, 100)
-	}
+	Bench("SetMutex: 1 читатель, 9 писателей", b, setMutex, 1, 9)
+	Bench("SetRWMutex: 1 читатель, 9 писателей", b, setRWMutex, 1, 9)
 
-	wg.Wait()
-}
+	Bench("SetMutex: 5 читателей, 5 писателей", b, setMutex, 5, 5)
+	Bench("SetRWMutex: 5 читателей, 5 писателей", b, setRWMutex, 5, 5)
 
-func BenchmarkMutexW50R50(b *testing.B) {
-	var (
-		wg sync.WaitGroup
-		me sync.Mutex
-	)
+	Bench("SetMutex: 9 читателей, 1 писатель", b, setMutex, 9, 1)
+	Bench("SetRWMutex: 9 читателей, 1 писатель", b, setRWMutex, 9, 1)
 
-	// 5 писателей
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go writer(&me, &wg, 100)
-	}
-
-	// 5 читателей
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go reader(&me, &wg, 100)
-	}
-
-	wg.Wait()
-}
-func BenchmarkRWMutexW50R50(b *testing.B) {
-	var (
-		wg sync.WaitGroup
-		me sync.RWMutex
-	)
-
-	// 5 писателей
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go writer(&me, &wg, 100)
-	}
-
-	// 5 читателей
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go reader(me.RLocker(), &wg, 100)
-	}
-
-	wg.Wait()
-}
-
-func BenchmarkMutexW90R10(b *testing.B) {
-	var (
-		wg sync.WaitGroup
-		me sync.Mutex
-	)
-
-	// 9 писателей
-	for i := 0; i < 9; i++ {
-		wg.Add(1)
-		go writer(&me, &wg, 100)
-	}
-
-	// 1 читатель
-	wg.Add(1)
-	go reader(&me, &wg, 900)
-
-	wg.Wait()
-}
-func BenchmarkRWMutexW90R10(b *testing.B) {
-	var (
-		wg sync.WaitGroup
-		me sync.RWMutex
-	)
-
-	// 9 писателей
-	for i := 0; i < 9; i++ {
-		wg.Add(1)
-		go writer(&me, &wg, 100)
-	}
-
-	// 1 читатель
-	wg.Add(1)
-	go reader(me.RLocker(), &wg, 900)
-
-	wg.Wait()
 }
