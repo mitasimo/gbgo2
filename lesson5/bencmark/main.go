@@ -63,3 +63,24 @@ func (s *SetMutex) Has(i int) bool {
 	s.me.Unlock()
 	return ok
 }
+
+// NewSetAtomic создает SetAtomic
+func NewSetAtomic() *SetAtomic {
+	return &SetAtomic{}
+}
+
+// SetAtomic - множество, основанное на sync.Map
+type SetAtomic struct {
+	nm sync.Map
+}
+
+// Add добавляет число ко множеству
+func (s *SetAtomic) Add(i int) {
+	s.nm.Store(i, struct{}{})
+}
+
+// Has проверяет наличие числа в множестве
+func (s *SetAtomic) Has(i int) bool {
+	_, ok := s.nm.Load(i)
+	return ok
+}
