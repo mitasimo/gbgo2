@@ -12,23 +12,25 @@ func main() {
 		me sync.Mutex
 	)
 
+	// начать запись трассировки
 	trace.Start(os.Stderr)
 	defer trace.Stop()
 
+	// мапа для совместного доступа из горутин
 	mp := make(map[int]int)
 
 	for i := 0; i < 16; i++ {
-		wg.Add(1)
+		wg.Add(1) // увеличить счетчик
 		go func(num int) {
-			defer wg.Done()
+			defer wg.Done() // по завершении уменьшить счетчик
 			for j := 0; j < 1000000; j++ {
-				me.Lock()
-				mp[num] = num
-				me.Unlock()
+				me.Lock()     // начало критической секции
+				mp[num] = num // изменить мапу
+				me.Unlock()   // конец критической секции
 			}
 		}(i)
 	}
 
-	wg.Wait()
+	wg.Wait() // дождаться завершения всех горутин
 
 }

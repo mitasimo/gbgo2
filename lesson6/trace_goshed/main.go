@@ -12,7 +12,7 @@ func main() {
 		wg sync.WaitGroup
 	)
 
-	// начать запись Trace
+	// начать запись трассировки
 	trace.Start(os.Stderr)
 	defer trace.Stop()
 
