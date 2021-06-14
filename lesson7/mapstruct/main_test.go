@@ -1,11 +1,29 @@
 package mapstruct
 
-import "testing"
+import (
+	"fmt"
+	"reflect"
+	"testing"
+)
+
+type St0 struct {
+	val1, val2 string
+}
+
+func BenchmarkAll(b *testing.B) {
+
+	var s = &St0{}
+
+	refVal := reflect.ValueOf(s)
+	fmt.Println(refVal.Kind().String())
+	fmt.Println(refVal.Elem().Kind())
+
+}
 
 func TestMapStruct(t *testing.T) {
 	type args struct {
 		dest interface{}
-		src  map[string]string
+		src  map[string]interface{}
 	}
 	tests := []struct {
 		name    string
