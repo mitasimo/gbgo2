@@ -2,30 +2,37 @@ package mapstruct
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
+)
+
+var (
+	errDstIsNil          = errors.New("dst is nil")
+	errDstMustBeSettable = errors.New("dst must be settable")
+	errDstMustBeStruct   = errors.New("dst must a struct")
 )
 
 // MapStruct заполняет структуру dest из мапы src
 func MapStruct(dst interface{}, src map[string]interface{}) error {
 	if dst == nil {
-		return errors.New("dst is nil")
+		return errDstIsNil
 	}
 
 	dstVal := reflect.ValueOf(dst)
 	if dstVal.Kind() != reflect.Ptr {
-		return errors.New("dst must be settable")
+		return errDstMustBeSettable
 	}
 
 	dstSetVal := dstVal.Elem()
 	if dstSetVal.Kind() != reflect.Struct {
-		return errors.New("dst must a struct")
+		return errDstMustBeStruct
 	}
 
 	for i := 0; i < dstSetVal.NumField(); i++ {
-		typeField := dstSetVal.Type().Field(i)
+		field := dstSetVal.Field(i)
+		fieldType := dstSetVal.Type().Field(i)
 
-		fieldKind := typeField.Type.Kind()
+		// пропустить сложные типы
+		fieldKind := field.Kind()
 		if fieldKind == reflect.Struct ||
 			fieldKind == reflect.Array ||
 			fieldKind == reflect.Chan ||
@@ -34,26 +41,27 @@ func MapStruct(dst interface{}, src map[string]interface{}) error {
 			fieldKind == reflect.Map ||
 			fieldKind == reflect.Ptr ||
 			fieldKind == reflect.Slice {
-			// пропустить сложные типы
+			//return errors.New("complex type")
 			continue
 		}
 
-		mval, ok := src[typeField.Name]
+		// получить из мапы значение, соответвующее имени поля структуры
+		mval, ok := src[fieldType.Name]
 		if !ok {
-			// в мапе отсутствует ключ, соответвующий имени поля структ
+			//return errors.New("can not find key")
 			continue
 		}
 
+		// типы значения в мапе и в поле структуры должны совпадать
 		mapVal := reflect.ValueOf(mval)
-		if typeField.Type.Kind() != mapVal.Kind() {
-			continue // различаются типы в мапе и структуре
+		if field.Kind() != mapVal.Kind() {
+			//return errors.New("diff types")
+			continue
 		}
 
 		// присвоить полю структуры значение из мапы
-
+		field.Set(mapVal)
 	}
-
-	fmt.Println(dstSetVal)
 
 	return nil
 }
