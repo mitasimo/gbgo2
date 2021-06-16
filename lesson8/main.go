@@ -1,10 +1,17 @@
+// Утилита для поиска и удаления задублированных файлов
+// в каталоге и его подкаталогах
+// Вызывается
+// $ util -p=<стартовый каталог> -r
+// ключ -p задает стартовый каталог (по уполчанию текущий каталог программы)
+// ключ -r заставит утилиту удалить файлы (оставит только один)
+
 package main
 
 import (
-	"crypto/md5"
 	"flag"
 	"fmt"
 	"hash"
+	"hash/adler32"
 	"io"
 	"log"
 	"os"
@@ -14,21 +21,23 @@ import (
 
 // FileHash связывает путь к файлу и его хэш
 type FileHash struct {
-	hash.Hash
+	hash.Hash32
 	FilePath string
 }
 
 func main() {
 
 	var (
-		startPath  string // каталог с которого начинать перебор файлов
-		needRemove bool   // признак необходимости удаления копий
+		startPath    string // каталог с которого начинать перебор файлов
+		removeCopies bool   // признак необходимости удаления копий
 	)
 
-	flag.StringVar(&startPath, "p", ".", "start path")
-	flag.BoolVar(&needRemove, "r", false, "remove copies")
-
+	// чтение флогов командной строки
+	flag.StringVar(&startPath, "p", ".", "начальный каталог")
+	flag.BoolVar(&removeCopies, "r", false, "удалять копии")
 	flag.Parse()
+
+	fmt.Println("Start path:", startPath)
 
 	if startPath == "" {
 		log.Fatal("start path is not set")
@@ -38,52 +47,50 @@ func main() {
 		wg sync.WaitGroup
 	)
 
-	filePathChan := make(chan string)
-	fileHashChan := make(chan *FileHash)
+	filePathChan := make(chan string)    // канал для передачи путей к файлам
+	fileHashChan := make(chan *FileHash) // канал для передачи хеша файлов
 
-	// запустить горутину, считывающую имена файлав из каталога
+	// запуск горутину=ы, считывающей имена файлав из каталога
 	go func() {
-		entries, err := os.ReadDir(startPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			// добавлять пути к файлам в канал
-			filePathChan <- startPath + "/" + entry.Name()
-		}
-
 		// как файлы закончислись, закрыть канал
-		close(filePathChan)
-		// close(doneChan)
+		defer close(filePathChan)
+		IterateEntitiesInDirectory(startPath, filePathChan)
 	}()
 
-	// запустить горутины подсчета хеша файлов
+	// запуск горутин подсчета хеша файлов
 	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
-			for filePath := range filePathChan {
+
+			for filePath := range filePathChan { // получить очередной путь к файлу из канала
+				// сформировать структуру для канала хеша
 				fileHash := &FileHash{
 					FilePath: filePath,
-					Hash:     md5.New(),
+					Hash32:   adler32.New(), //
 				}
 
+				// открыть файл по пути
 				file, err := os.Open(filePath)
 				if err != nil {
 					log.Println(err)
 					continue
 				}
 
+				// хешировать данные файлы
 				io.Copy(fileHash, file)
+				// отправить хеш файла в канал
 				fileHashChan <- fileHash
 			}
 		}()
 	}
 
+	// Очень важная горутина!!!
+	// Дожидается завершения горутин расчета хеша,
+	// после чего закрывает канал для хешей.
+	// Без нее основаная горутина всегда будет
+	// ожидать хеш из канала
 	go func() {
 		wg.Wait()
 		close(fileHashChan)
@@ -92,36 +99,77 @@ func main() {
 	// мапа для сбора данных о дублях
 	// ключ - хеш в виде строки
 	// значение - массив путей к файлам
-	doubles := make(map[string][]string)
+	copies := make(map[uint32][]string)
 
 	// читаем из канала хеши
 	for fileHash := range fileHashChan {
 		// добавляем к хешам пути
-		strHash := fmt.Sprintf("%x", fileHash.Sum(nil))
-		filesPath := doubles[strHash]
+		hash := fileHash.Sum32()
+		filesPath := copies[hash]
 		filesPath = append(filesPath, fileHash.FilePath)
-		doubles[strHash] = filesPath
+		copies[hash] = filesPath
 	}
 
-	if len(doubles) == 0 {
-		fmt.Println("doubles not found")
-		return
-	}
+	copiesPrinted := 0 // коичество напечатанных путей к дублям
 
-	doublesPrinted := 0
-
-	for key, pathes := range doubles {
+	for key, pathes := range copies {
 		if len(pathes) > 1 {
-			doublesPrinted++
-			fmt.Println(key)
+			copiesPrinted++
+			fmt.Println("Hash:", key)
 			for _, curPath := range pathes {
 				fmt.Println("\t", curPath)
 			}
 		}
 	}
 
-	if doublesPrinted == 0 {
-		fmt.Println("doubles not found")
+	if copiesPrinted == 0 {
+		fmt.Println("одинаковые файлы не обнаружены")
+		return
 	}
 
+	if !removeCopies {
+		return // ключ удалени копий не задан
+	}
+
+	// спросить пользователя, хочет он удалять копии или нет
+	var answer string
+	fmt.Print("remove copies? ")
+	fmt.Scanln(&answer)
+	if answer != "y" && answer != "Y" {
+		return
+	}
+
+	for _, pathes := range copies {
+		// получать пути к файлам начиная со второго!!!
+		for i := 1; i < len(pathes); i++ {
+			err := os.Remove(pathes[i])
+			if err != nil {
+				log.Println(err)
+			} else {
+				fmt.Println("удален: ", pathes[i])
+			}
+		}
+	}
+}
+
+// IterateEntitiesInDirectory перебирает файлы в каталоге
+// и его подкаталогах начиная со startPath
+// Полученные пути отправляет в канал filePathChan
+func IterateEntitiesInDirectory(startPath string, filePathChan chan string) {
+	entries, err := os.ReadDir(startPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, entry := range entries {
+		curPath := fmt.Sprintf("%s/%s", startPath, entry.Name())
+		if entry.IsDir() {
+			// вызвать рекурсивно для подкаталога
+			IterateEntitiesInDirectory(curPath, filePathChan)
+		} else {
+			// отправить путь к файлу в канал
+			filePathChan <- curPath
+		}
+
+	}
 }

@@ -2,6 +2,6 @@ package main
 
 import "testing"
 
-func BenchmarkMD5(b *testing.B) {
+func BenchmarAll(b *testing.B) {
 
 }
