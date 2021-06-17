@@ -1,34 +1,41 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/signal"
-	"syscall"
 	"time"
 )
 
-var (
-	Terminate os.Signal = syscall.SIGTERM
-)
-
 func main() {
-	// создать контекст, который закроет свой канал done() при поступлении сигнал SIGINT и SIGTERM
-	ctxSig, cancelSig := signal.NotifyContext(context.Background(), os.Interrupt, Terminate)
-	// в конце функции main вызвать функцию завершения
-	defer cancelSig()
 
-	// создать контектс с таймаутом
-	ctxTimeoOut, cancelTimeoOut := context.WithTimeout(context.Background(), time.Second)
-	// в конце функции main вызвать функцию завершения
-	defer cancelTimeoOut()
+	// канал для завершения горутин
+	done := make(chan struct{})
 
-	// ожидать поступления сигнала SIGTERM или завершения таймаута
-	select {
-	case <-ctxSig.Done():
-		fmt.Printf("Поступил сигнал. Причина завершения контекста: %v\n", ctxSig.Err())
-	case <-ctxTimeoOut.Done():
-		fmt.Printf("Наступил таймаут. Причина завершения контекста:  %v\n", ctxTimeoOut.Err())
+	for i := 0; i < 10; i++ {
+		go func(num int, sleep time.Duration) {
+			for {
+				select {
+				case <-done: // закрыт канал завершения
+					fmt.Println("Завершилась горутина ", num)
+					return // завершит горутину
+				default:
+					time.Sleep(sleep) // заснуть
+				}
+			}
+
+		}(10-i, time.Millisecond*time.Duration(i+500))
 	}
+
+	// канал для сигналов ОС
+	sig := make(chan os.Signal)
+	// подписаться на сигнал SIGTERM
+	signal.Notify(sig, os.Interrupt)
+
+	<-sig // ожидать получения сигнала ОС
+
+	close(done)             // закрыть канал для заверешения
+	time.Sleep(time.Second) // подождать секунду
+	os.Exit(-1)             // завершить приложение... можно было не вызывать...
+
 }
