@@ -20,7 +20,7 @@ import (
 
 // FileHash связывает путь к файлу и его хэш
 type FileHash struct {
-	Hash32   uint32
+	Hash     uint32
 	FilePath string
 }
 
@@ -74,11 +74,12 @@ func main() {
 				// хешировать данные файла
 				hash := adler32.New()
 				io.Copy(hash, file)
+				file.Close()
 
 				// отправить хеш файла в канал
 				fileHashChan <- &FileHash{
 					FilePath: filePath,
-					Hash32:   hash.Sum32(),
+					Hash:     hash.Sum32(),
 				}
 			}
 		}()
@@ -95,15 +96,15 @@ func main() {
 	}()
 
 	// мапа для сбора данных о дублях
-	// ключ - хеш в виде строки
-	// значение - массив путей к файлам
+	// ключ - хеш uint32
+	// значение - массив путей к одинаковым файлам
 	copies := make(map[uint32][]string)
 
 	// читаем из канала хеши с их путями и добавляем в мапу копий
 	for fileHash := range fileHashChan {
-		filesPath := copies[fileHash.Hash32]
-		filesPath = append(filesPath, fileHash.FilePath)
-		copies[fileHash.Hash32] = filesPath
+		filesPath := copies[fileHash.Hash]               // получить массив путей к файлам
+		filesPath = append(filesPath, fileHash.FilePath) // добавить путь к массиву
+		copies[fileHash.Hash] = filesPath                // сохранить новый массив путей
 	}
 
 	copiesPrinted := 0 // количество напечатанных путей к дублям
