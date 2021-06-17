@@ -36,11 +36,11 @@ func main() {
 	flag.BoolVar(&removeCopies, "rm", false, "удалять копии")
 	flag.Parse()
 
-	fmt.Println("Start path:", startPath)
-
 	if startPath == "" {
-		log.Fatal("start path is not set")
+		log.Fatal("не задан начальный каталог")
 	}
+
+	fmt.Println("Начальный каталог:", startPath)
 
 	var (
 		wg sync.WaitGroup
@@ -111,7 +111,7 @@ func main() {
 	for key, pathes := range copies {
 		if len(pathes) > 1 { // есть копии
 			copiesPrinted++
-			fmt.Println("Hash:", key) // вывести хеш
+			fmt.Println("Хеш:", key) // вывести хеш
 			for _, curPath := range pathes {
 				fmt.Println("\t", curPath) // вывести путь к файлу
 			}
@@ -129,7 +129,7 @@ func main() {
 
 	// спросить пользователя, хочет он удалять копии или нет
 	var answer string
-	fmt.Print("remove copies? ")
+	fmt.Print("удалить копии (Y/N)? ")
 	fmt.Scanln(&answer)
 	if answer != "y" && answer != "Y" {
 		return
