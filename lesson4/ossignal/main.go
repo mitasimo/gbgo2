@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -9,33 +10,41 @@ import (
 
 func main() {
 
-	// канал для завершения горутин
-	done := make(chan struct{})
+	// создать канал для получиния сигналов ОС
+	chanSig := make(chan os.Signal)
+	// настроить канал на получение сигналов SIGINT и SIGTERM
+	signal.Notify(chanSig, os.Interrupt)
+
+	// создать контекст для завершения грутин
+	ctx, cancel := context.WithCancel(context.Background())
 
 	for i := 0; i < 10; i++ {
-		go func(num int, sleep time.Duration) {
-			for {
-				select {
-				case <-done: // закрыт канал завершения
-					fmt.Println("Завершилась горутина ", num)
-					return // завершит горутину
-				default:
-					time.Sleep(sleep) // заснуть
-				}
-			}
-
-		}(10-i, time.Millisecond*time.Duration(i+500))
+		go Do(ctx, time.Millisecond*time.Duration((i+1)*500), fmt.Sprintf("Горутина %d завершена", i))
 	}
 
-	// канал для сигналов ОС
-	sig := make(chan os.Signal)
-	// подписаться на сигнал SIGTERM
-	signal.Notify(sig, os.Interrupt)
+	// ожидать сигнал ОС
+	<-chanSig
+	// завершить контекст
+	cancel()
+	// подождать завершения горутин 1 секунда
+	time.Sleep(time.Second)
+	// завершить приложеие
+	os.Exit(-1)
+}
 
-	<-sig // ожидать получения сигнала ОС
-
-	close(done)             // закрыть канал для заверешения
-	time.Sleep(time.Second) // подождать секунду
-	os.Exit(-1)             // завершить приложение... можно было не вызывать...
-
+// Do проверяет закрытие канала ctx.
+// Если закрыт, выводит сообщение message.
+// Если не закрыт, то засыпает на timeToSleep
+func Do(ctx context.Context, timeToSleep time.Duration, message string) {
+	for {
+		select {
+		case <-ctx.Done():
+			// при закрытии канала сообщить о завершении горуиы
+			fmt.Println(message)
+			return
+		default:
+			// заснуть на очень короткий промежуток времени
+			time.Sleep(timeToSleep)
+		}
+	}
 }
