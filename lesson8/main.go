@@ -2,15 +2,14 @@
 // в каталоге и его подкаталогах
 // Вызывается
 // $ util -p=<стартовый каталог> -r
-// ключ -p задает стартовый каталог (по уполчанию текущий каталог программы)
-// ключ -r заставит утилиту удалить файлы (оставит только один)
+// ключ -dir (directory) задает стартовый каталог (по уполчанию текущий каталог программы)
+// ключ -rm (remove) заставит утилиту удалить файлы (оставит только один)
 
 package main
 
 import (
 	"flag"
 	"fmt"
-	"hash"
 	"hash/adler32"
 	"io"
 	"log"
@@ -21,7 +20,7 @@ import (
 
 // FileHash связывает путь к файлу и его хэш
 type FileHash struct {
-	hash.Hash32
+	Hash32   uint32
 	FilePath string
 }
 
@@ -33,8 +32,8 @@ func main() {
 	)
 
 	// чтение флогов командной строки
-	flag.StringVar(&startPath, "p", ".", "начальный каталог")
-	flag.BoolVar(&removeCopies, "r", false, "удалять копии")
+	flag.StringVar(&startPath, "dir", ".", "начальный каталог")
+	flag.BoolVar(&removeCopies, "rm", false, "удалять копии")
 	flag.Parse()
 
 	fmt.Println("Start path:", startPath)
@@ -52,7 +51,7 @@ func main() {
 
 	// запуск горутину=ы, считывающей имена файлав из каталога
 	go func() {
-		// как файлы закончислись, закрыть канал
+		// после завершения итераций по файлам закрыть канал путей к файлам
 		defer close(filePathChan)
 		IterateEntitiesInDirectory(startPath, filePathChan)
 	}()
@@ -65,23 +64,22 @@ func main() {
 			defer wg.Done()
 
 			for filePath := range filePathChan { // получить очередной путь к файлу из канала
-				// сформировать структуру для канала хеша
-				fileHash := &FileHash{
-					FilePath: filePath,
-					Hash32:   adler32.New(), //
-				}
-
 				// открыть файл по пути
 				file, err := os.Open(filePath)
 				if err != nil {
-					log.Println(err)
-					continue
+					log.Println(err) // записать ошибку в лог
+					continue         // пропустить путь к файлу
 				}
 
-				// хешировать данные файлы
-				io.Copy(fileHash, file)
+				// хешировать данные файла
+				hash := adler32.New()
+				io.Copy(hash, file)
+
 				// отправить хеш файла в канал
-				fileHashChan <- fileHash
+				fileHashChan <- &FileHash{
+					FilePath: filePath,
+					Hash32:   hash.Sum32(),
+				}
 			}
 		}()
 	}
@@ -101,23 +99,21 @@ func main() {
 	// значение - массив путей к файлам
 	copies := make(map[uint32][]string)
 
-	// читаем из канала хеши
+	// читаем из канала хеши с их путями и добавляем в мапу копий
 	for fileHash := range fileHashChan {
-		// добавляем к хешам пути
-		hash := fileHash.Sum32()
-		filesPath := copies[hash]
+		filesPath := copies[fileHash.Hash32]
 		filesPath = append(filesPath, fileHash.FilePath)
-		copies[hash] = filesPath
+		copies[fileHash.Hash32] = filesPath
 	}
 
-	copiesPrinted := 0 // коичество напечатанных путей к дублям
+	copiesPrinted := 0 // количество напечатанных путей к дублям
 
 	for key, pathes := range copies {
-		if len(pathes) > 1 {
+		if len(pathes) > 1 { // есть копии
 			copiesPrinted++
-			fmt.Println("Hash:", key)
+			fmt.Println("Hash:", key) // вывести хеш
 			for _, curPath := range pathes {
-				fmt.Println("\t", curPath)
+				fmt.Println("\t", curPath) // вывести путь к файлу
 			}
 		}
 	}
@@ -128,7 +124,7 @@ func main() {
 	}
 
 	if !removeCopies {
-		return // ключ удалени копий не задан
+		return // ключ удаления копий не задан
 	}
 
 	// спросить пользователя, хочет он удалять копии или нет
@@ -139,14 +135,14 @@ func main() {
 		return
 	}
 
-	for _, pathes := range copies {
+	for _, paths := range copies {
 		// получать пути к файлам начиная со второго!!!
-		for i := 1; i < len(pathes); i++ {
-			err := os.Remove(pathes[i])
+		for i := 1; i < len(paths); i++ {
+			err := os.Remove(paths[i])
 			if err != nil {
 				log.Println(err)
 			} else {
-				fmt.Println("удален: ", pathes[i])
+				fmt.Println("удален файл: ", paths[i])
 			}
 		}
 	}
@@ -154,7 +150,7 @@ func main() {
 
 // IterateEntitiesInDirectory перебирает файлы в каталоге
 // и его подкаталогах начиная со startPath
-// Полученные пути отправляет в канал filePathChan
+// Полученные пути к файлам отправляет в канал filePathChan
 func IterateEntitiesInDirectory(startPath string, filePathChan chan string) {
 	entries, err := os.ReadDir(startPath)
 	if err != nil {
