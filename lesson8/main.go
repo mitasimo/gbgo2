@@ -45,7 +45,7 @@ func main() {
 		logger.Error("не задан начальный каталог")
 	}
 
-	logger.WithField("CurrentDir", startPath).Info("обрабатывается каталог")
+	logger.WithField("dir", startPath).Info("обрабатывается каталог")
 
 	var (
 		wg sync.WaitGroup
@@ -169,7 +169,7 @@ func main() {
 // и его подкаталогах начиная со startPath
 // Полученные пути к файлам отправляет в канал filePathChan
 func IterateEntitiesInDirectory(startPath string, filePathChan chan string, logger *log.Logger) {
-	ll := logger.WithField("Dir", startPath)
+	ll := logger.WithField("dir", startPath)
 
 	entries, err := os.ReadDir(startPath)
 	if err != nil {
