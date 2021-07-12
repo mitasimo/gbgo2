@@ -127,15 +127,16 @@ func main() {
 	for key, pathes := range copies {
 		if len(pathes) > 1 { // есть копии
 			copiesPrinted++
-			fmt.Println("Хеш:", key) // вывести хеш
+			ll := logger.WithField("hash", key)
+			//fmt.Println("Хеш:", key) // вывести хеш
 			for _, curPath := range pathes {
-				fmt.Println("\t", curPath) // вывести путь к файлу
+				ll.WithField("path", curPath).Info("equal") // вывести путь к файлу
 			}
 		}
 	}
 
 	if copiesPrinted == 0 {
-		log.Info("одинаковые файлы не обнаружены")
+		logger.Info("одинаковые файлы не обнаружены")
 		return
 	}
 
