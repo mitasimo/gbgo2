@@ -20,7 +20,7 @@ func TestIterate(t *testing.T) {
 	filePathChan := make(chan string)
 	go func() {
 		defer close(filePathChan)
-		IterateEntitiesInDirectory("./tests", filePathChan)
+		IterateEntitiesInDirectory("./tests", filePathChan, nil)
 	}()
 	for path := range filePathChan {
 		real[path] = struct{}{}

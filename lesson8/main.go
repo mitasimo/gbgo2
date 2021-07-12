@@ -12,19 +12,24 @@ import (
 	"fmt"
 	"hash/adler32"
 	"io"
-	"log"
 	"os"
 	"runtime"
 	"sync"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // FileHash связывает путь к файлу и его хэш
 type FileHash struct {
 	Hash     uint32
 	FilePath string
+	Err      error
 }
 
 func main() {
+
+	logger := log.New()
+	logger.SetFormatter(&log.JSONFormatter{})
 
 	var (
 		startPath    string // каталог с которого начинать перебор файлов
@@ -37,10 +42,10 @@ func main() {
 	flag.Parse()
 
 	if startPath == "" {
-		log.Fatal("не задан начальный каталог")
+		logger.Error("не задан начальный каталог")
 	}
 
-	fmt.Println("Начальный каталог:", startPath)
+	logger.WithField("CurrentDir", startPath).Info("обрабатывается каталог")
 
 	var (
 		wg sync.WaitGroup
@@ -53,7 +58,7 @@ func main() {
 	go func() {
 		// после завершения итераций по файлам закрыть канал путей к файлам
 		defer close(filePathChan)
-		IterateEntitiesInDirectory(startPath, filePathChan)
+		IterateEntitiesInDirectory(startPath, filePathChan, logger)
 	}()
 
 	// запуск горутин подсчета хеша файлов
@@ -64,23 +69,26 @@ func main() {
 			defer wg.Done()
 
 			for filePath := range filePathChan { // получить очередной путь к файлу из канала
+				fileHash := &FileHash{FilePath: filePath}
 				// открыть файл по пути
 				file, err := os.Open(filePath)
 				if err != nil {
-					log.Println(err) // записать ошибку в лог
-					continue         // пропустить путь к файлу
+					//log.Println(err) // записать ошибку в лог
+					fileHash.Err = err
+				} else {
+					// хешировать данные файла
+					hash := adler32.New()
+					_, err = io.Copy(hash, file)
+					file.Close()
+
+					if err != nil {
+						fileHash.Err = err
+					} else {
+						fileHash.Hash = hash.Sum32()
+					}
 				}
-
-				// хешировать данные файла
-				hash := adler32.New()
-				io.Copy(hash, file)
-				file.Close()
-
 				// отправить хеш файла в канал
-				fileHashChan <- &FileHash{
-					FilePath: filePath,
-					Hash:     hash.Sum32(),
-				}
+				fileHashChan <- fileHash
 			}
 		}()
 	}
@@ -102,9 +110,16 @@ func main() {
 
 	// читаем из канала хеши с их путями и добавляем в мапу копий
 	for fileHash := range fileHashChan {
-		filesPath := copies[fileHash.Hash]               // получить массив путей к файлам
-		filesPath = append(filesPath, fileHash.FilePath) // добавить путь к массиву
-		copies[fileHash.Hash] = filesPath                // сохранить новый массив путей
+		ll := logger.WithField("Path", fileHash.FilePath)
+		if fileHash.Err != nil {
+			ll.Errorf("ошибка получения хеша: %v", fileHash.Err)
+		} else {
+			filesPath := copies[fileHash.Hash]               // получить массив путей к файлам
+			filesPath = append(filesPath, fileHash.FilePath) // добавить путь к массиву
+			copies[fileHash.Hash] = filesPath                // сохранить новый массив путей
+
+			ll.Info("хеш посчитан")
+		}
 	}
 
 	copiesPrinted := 0 // количество напечатанных путей к дублям
@@ -120,7 +135,7 @@ func main() {
 	}
 
 	if copiesPrinted == 0 {
-		fmt.Println("одинаковые файлы не обнаружены")
+		log.Info("одинаковые файлы не обнаружены")
 		return
 	}
 
@@ -129,21 +144,22 @@ func main() {
 	}
 
 	// спросить пользователя, хочет он удалять копии или нет
-	var answer string
-	fmt.Print("удалить копии (Y/N)? ")
-	fmt.Scanln(&answer)
-	if answer != "y" && answer != "Y" {
-		return
-	}
+	// var answer string
+	// fmt.Print("удалить копии (Y/N)? ")
+	// fmt.Scanln(&answer)
+	// if answer != "y" && answer != "Y" {
+	// 	return
+	// }
 
 	for _, paths := range copies {
 		// получать пути к файлам начиная со второго!!!
 		for i := 1; i < len(paths); i++ {
+			ll := logger.WithField("Path", paths[i])
 			err := os.Remove(paths[i])
 			if err != nil {
-				log.Println(err)
+				ll.Errorf("ошибка удаления файла: %v", err)
 			} else {
-				fmt.Println("удален файл: ", paths[i])
+				ll.Info("файл удален")
 			}
 		}
 	}
@@ -152,21 +168,25 @@ func main() {
 // IterateEntitiesInDirectory перебирает файлы в каталоге
 // и его подкаталогах начиная со startPath
 // Полученные пути к файлам отправляет в канал filePathChan
-func IterateEntitiesInDirectory(startPath string, filePathChan chan string) {
+func IterateEntitiesInDirectory(startPath string, filePathChan chan string, logger *log.Logger) {
+	ll := logger.WithField("Dir", startPath)
+
 	entries, err := os.ReadDir(startPath)
 	if err != nil {
-		log.Fatal(err)
+		ll.Errorf("ошибка чтения каталога")
+		return
+		//log.Fatal(err)
 	}
+	ll.Info("обрабатывается каталог")
 
 	for _, entry := range entries {
 		curPath := fmt.Sprintf("%s/%s", startPath, entry.Name())
 		if entry.IsDir() {
 			// вызвать рекурсивно для подкаталога
-			IterateEntitiesInDirectory(curPath, filePathChan)
+			IterateEntitiesInDirectory(curPath, filePathChan, logger)
 		} else {
 			// отправить путь к файлу в канал
 			filePathChan <- curPath
 		}
-
 	}
 }
