@@ -8,6 +8,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"hash/adler32"
@@ -77,14 +78,13 @@ func main() {
 					fileHash.Err = err
 				} else {
 					// хешировать данные файла
-					hash := adler32.New()
-					_, err = io.Copy(hash, file)
+					hash, err := CalculateAdler32Hash(file)
 					file.Close()
 
 					if err != nil {
 						fileHash.Err = err
 					} else {
-						fileHash.Hash = hash.Sum32()
+						fileHash.Hash = hash
 					}
 				}
 				// отправить хеш файла в канал
@@ -190,4 +190,16 @@ func IterateEntitiesInDirectory(startPath string, filePathChan chan string, logg
 			filePathChan <- curPath
 		}
 	}
+}
+
+func CalculateAdler32Hash(r io.Reader) (uint32, error) {
+	if r == nil {
+		return 0, errors.New("nil reader")
+	}
+	hash := adler32.New()
+	_, err := io.Copy(hash, r)
+	if err != nil && err != io.EOF {
+		return 0, err
+	}
+	return hash.Sum32(), nil
 }
