@@ -5,6 +5,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestIterate(t *testing.T) {
@@ -80,6 +82,7 @@ func TestCalculateAdler32Hash(t *testing.T) {
 				t.Errorf("CalculateAdler32Hash() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			assert.Equal()
 			if got != tt.want {
 				t.Errorf("CalculateAdler32Hash() = %v, want %v", got, tt.want)
 			}

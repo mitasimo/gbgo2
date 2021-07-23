@@ -203,3 +203,23 @@ func CalculateAdler32Hash(r io.Reader) (uint32, error) {
 	}
 	return hash.Sum32(), nil
 }
+
+// FileSystemEntry описывает функционал сущности файловой системы
+type FileSystemEntry interface {
+	Path() string
+	IsDir() bool
+	SubEntries() []FileSystemEntry
+}
+
+// FileSystemEntryImpl релизует функционал...
+type FileSystemEntryImpl struct {
+	path  string
+	isDir bool
+}
+
+func (fsi *FileSystemEntryImpl) Path() string {
+	return fsi.path
+}
+func (fsi *FileSystemEntryImpl) IsDir() bool {
+	return fsi.isDir
+}
