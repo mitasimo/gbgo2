@@ -26,7 +26,7 @@ type FilesIterator interface {
 	Next() bool
 	// Path - возвращает путь к текущему файлу
 	Path() (string, error)
-	// Reader - возвращает io.Reader текущего файла или ошибку
+	// Reader - возвращает io.ReadCloser текущего файла или ошибку
 	ReadCloser() (io.ReadCloser, error)
 }
 

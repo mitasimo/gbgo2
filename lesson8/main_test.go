@@ -93,3 +93,50 @@ type ErrorReader struct{}
 func (r ErrorReader) Read(b []byte) (int, error) {
 	return 0, errors.New("can not read from ErrorReader")
 }
+
+type pathBody struct {
+	path, body string
+}
+type filesIteratorStab struct {
+	curItem int
+	stub    []pathBody
+}
+
+func (i *filesIteratorStab) Next() bool {
+	if i.curItem >= len(i.stub)-1 {
+		return false
+	}
+	i.curItem++
+	return true
+}
+
+func (i *filesIteratorStab) Path() (string, error) {
+	if i.curItem == -1 {
+		return "", unboundError()
+	}
+	i.curItem++
+	return i.stub[i.curItem].path, nil
+}
+
+func (i *filesIteratorStab) ReadCloser() (io.ReadCloser, error) {
+	if i.curItem == -1 {
+		return nil, unboundError()
+	}
+	i.curItem++
+	rnc := &ReadNotCloser{
+		Reader: strings.NewReader(i.stub[i.curItem].body),
+	}
+	return rnc, nil
+}
+
+func unboundError() error {
+	return errors.New("unbound")
+}
+
+type ReadNotCloser struct {
+	io.Reader
+}
+
+func (rnc *ReadNotCloser) Close() error {
+	return nil
+}
