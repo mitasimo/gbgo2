@@ -1,52 +1,86 @@
 package fs
 
 import (
+	"errors"
+	"io"
 	"os"
 	"strings"
 )
 
-// FileSystemEntry описывает функционал сущности файловой системы
-type FileSystemEntry interface {
-	Path() string
-	IsDir() bool
-	SubEntries() ([]FileSystemEntry, error)
-}
+var (
+	ErrOutOfBound = errors.New("out of bound")
+)
 
-func New(startPath string) *FileSystemEntryImpl {
+func New(startPath string, recur bool) (*FileSystemIterator, error) {
+	paths, err := iterateFilesInDirerctory(startPath, recur)
+	if err != nil {
+		return nil, err
+	}
 
+	return &FileSystemIterator{
+		currentIndex: -1,
+		paths:        paths,
+	}, nil
 }
 
 // FileSystemEntryImpl релизует функционал...
-type FileSystemEntryImpl struct {
-	path  string
-	isDir bool
+type FileSystemIterator struct {
+	currentIndex int
+	paths        []string
 }
 
-func (fsi *FileSystemEntryImpl) Path() string {
-	return fsi.path
-}
-func (fsi *FileSystemEntryImpl) IsDir() bool {
-	return fsi.isDir
+func (fsi *FileSystemIterator) Next() bool {
+	if len(fsi.paths) == 0 || fsi.currentIndex >= len(fsi.paths)-1 {
+		return false
+	}
+	fsi.currentIndex++
+	return true
 }
 
-func (fsi *FileSystemEntryImpl) SubEntries() ([]FileSystemEntry, error) {
-	subEntries := make([]FileSystemEntry, 0)
+func (fsi *FileSystemIterator) Path() (string, error) {
+	if fsi.currentIndex < 0 {
+		return "", ErrOutOfBound
+	}
+	return fsi.paths[fsi.currentIndex], nil
+}
 
-	entries, err := os.ReadDir(fsi.path)
+func (fsi *FileSystemIterator) ReadCloser() (io.ReadCloser, error) {
+	if fsi.currentIndex < 0 {
+		return nil, ErrOutOfBound
+	}
+	return os.Open(fsi.paths[fsi.currentIndex])
+}
+
+func iterateFilesInDirerctory(startPath string, recur bool) ([]string, error) {
+	paths := make([]string, 0)
+
+	entries, err := os.ReadDir(startPath)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, entry := range entries {
-		subEntries = append(subEntries, &FileSystemEntryImpl{
-			path:  joinStrings(fsi.path, "/", entry.Name()),
-			isDir: entry.IsDir(),
-		})
+
+		newPath := strings.Join(StringArgsArrTo(startPath, entry.Name()), "/")
+
+		if entry.IsDir() {
+			if !recur {
+				continue
+			}
+
+			subPath, err := iterateFilesInDirerctory(newPath, recur)
+			if err != nil {
+				return nil, err
+			}
+			paths = append(paths, subPath...)
+		} else {
+			paths = append(paths, newPath)
+		}
 	}
 
-	return subEntries, nil
+	return paths, nil
 }
 
-func joinStrings(strs ...string) string {
-	return strings.Join(strs, "/")
+func StringArgsArrTo(strs ...string) []string {
+	return strs
 }
