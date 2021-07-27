@@ -67,8 +67,53 @@ func main() {
 		os.Exit(-1)
 	}
 
-	logger.WithField("dir", startPath).Debug("обрабатывается каталог")
+	copies := GetCopies(fi)
 
+	copiesPrinted := 0 // количество напечатанных путей к дублям
+
+	for key, pathes := range copies {
+		if len(pathes) > 1 { // есть копии
+			copiesPrinted++
+			ll := logger.WithField("hash", key)
+			ll.Info("duplicated hash")
+			for _, curPath := range pathes {
+				ll.WithField("path", curPath).Info("duplicated file") // вывести путь к файлу
+			}
+		}
+	}
+
+	if copiesPrinted == 0 {
+		logger.Info("одинаковые файлы не обнаружены")
+		return
+	}
+
+	if !removeCopies {
+		return // ключ удаления копий не задан
+	}
+
+	// спросить пользователя, хочет он удалять копии или нет
+	// var answer string
+	// fmt.Print("удалить копии (Y/N)? ")
+	// fmt.Scanln(&answer)
+	// if answer != "y" && answer != "Y" {
+	// 	return
+	// }
+
+	for _, paths := range copies {
+		// получать пути к файлам начиная со второго!!!
+		for i := 1; i < len(paths); i++ {
+			ll := logger.WithField("Path", paths[i])
+			err := os.Remove(paths[i])
+			if err != nil {
+				ll.Errorf("ошибка удаления файла: %v", err)
+			} else {
+				ll.Info("файл удален")
+			}
+		}
+	}
+}
+
+func GetCopies(fi FilesIterator) map[uint32][]string {
 	var (
 		wg sync.WaitGroup
 	)
@@ -80,7 +125,7 @@ func main() {
 	go func() {
 		// после завершения итераций по файлам закрыть канал путей к файлам
 		defer close(fileEntryChan)
-		IterateEntitiesInDirectory(fi, fileEntryChan, logger)
+		IterateEntitiesInDirectory(fi, fileEntryChan)
 	}()
 
 	// запуск горутин подсчета хеша файлов
@@ -124,73 +169,24 @@ func main() {
 
 	// читаем из канала хеши с их путями и добавляем в мапу копий
 	for fileHash := range fileHashChan {
-		ll := logger.WithField("Path", fileHash.Path)
-		if fileHash.Err != nil {
-			ll.Errorf("ошибка получения хеша: %v", fileHash.Err)
-		} else {
+		if fileHash.Err == nil {
 			filesPath := copies[fileHash.Hash]           // получить массив путей к файлам
 			filesPath = append(filesPath, fileHash.Path) // добавить путь к массиву
 			copies[fileHash.Hash] = filesPath            // сохранить новый массив путей
-
-			ll.Debug("хеш посчитан")
 		}
 	}
 
-	copiesPrinted := 0 // количество напечатанных путей к дублям
-
-	for key, pathes := range copies {
-		if len(pathes) > 1 { // есть копии
-			copiesPrinted++
-			ll := logger.WithField("hash", key)
-			ll.Info("duplicated hash")
-			//fmt.Println("Хеш:", key) // вывести хеш
-			for _, curPath := range pathes {
-				ll.WithField("path", curPath).Info("duplicated file") // вывести путь к файлу
-			}
-		}
-	}
-
-	if copiesPrinted == 0 {
-		logger.Info("одинаковые файлы не обнаружены")
-		return
-	}
-
-	if !removeCopies {
-		return // ключ удаления копий не задан
-	}
-
-	// спросить пользователя, хочет он удалять копии или нет
-	// var answer string
-	// fmt.Print("удалить копии (Y/N)? ")
-	// fmt.Scanln(&answer)
-	// if answer != "y" && answer != "Y" {
-	// 	return
-	// }
-
-	for _, paths := range copies {
-		// получать пути к файлам начиная со второго!!!
-		for i := 1; i < len(paths); i++ {
-			ll := logger.WithField("Path", paths[i])
-			err := os.Remove(paths[i])
-			if err != nil {
-				ll.Errorf("ошибка удаления файла: %v", err)
-			} else {
-				ll.Info("файл удален")
-			}
-		}
-	}
+	return copies
 }
 
 // IterateEntitiesInDirectory перебирает файлы в каталоге
 // и его подкаталогах начиная со startPath
 // Полученные пути к файлам отправляет в канал filePathChan
-func IterateEntitiesInDirectory(fi FilesIterator, fileEntryChan chan *FileEntry, logger *log.Logger) {
+func IterateEntitiesInDirectory(fi FilesIterator, fileEntryChan chan<- *FileEntry) {
 	for fi.Next() {
 		path, _ := fi.Path()
 		rc, err := fi.ReadCloser()
-		if err != nil {
-			logger.WithField("Path", path).Error(err.Error(), "get GetReadCloser")
-		} else {
+		if err == nil {
 			fileEntryChan <- &FileEntry{
 				Path: path,
 				RC:   rc,

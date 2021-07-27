@@ -1,3 +1,5 @@
+// +build integration
+
 package fs
 
 import (
@@ -20,9 +22,6 @@ func TestIntegration(t *testing.T) {
 	actual, err := iterateFilesInDirerctory("../tests", true)
 
 	if assert.NoError(t, err) {
-		// for _, path := range actual {
-		// 	assert.Contains(t, expected, path)
-		// }
 		assert.Equal(t, expected, actual)
 	}
 
